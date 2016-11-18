@@ -73,8 +73,8 @@ class JSONPathTests: XCTestCase {
 
     func testEncodeTextAsSubscriptPathComponent() {
         let encodeText = { (text: String) -> ([JSONPath.Component], [JSONPath.Component]) in
-            let encodedText = JSONPath.Component.text(text)
-            let path = try? JSONPath(path: encodedText.textRepresentation)
+            let encodedText = JSONPath.encodeTextAsSubscriptPathComponent(text)
+            let path = try? JSONPath(path: encodedText)
             let actual = (path?.components ?? [])
             let expected = [JSONPath.Component.text(text)]
             return (expected, actual)

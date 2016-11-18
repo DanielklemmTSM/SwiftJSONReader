@@ -9,7 +9,6 @@
 import Foundation
 
 
-//MARK:- JSONPath Definition
 /**
 JSONPath represents a path through a tree of JSON objects.
 
@@ -35,62 +34,10 @@ public struct JSONPath {
 }
 
 
-//MARK:- Text Representation
-
-extension JSONPath.Component {
-
-    public var textRepresentation: String {
-        switch self {
-        case .numeric(let i):
-            return "[\(i)]"
-        case .selfReference:
-            return "[self]"
-        case .text(let text):
-            return encodeStringAsSubscriptRepresentation(text)
-        }
-    }
-
-    private func encodeStringAsSubscriptRepresentation(_ text: String) -> String {
-        let mutableText =  NSMutableString(string: text)
-        //Note that the order of the replacements is significant. We must replace '`' first otherwise our replacements will get replaced.
-        mutableText.replaceOccurrences(of: "`", with: "``", options: [], range: NSRange(location: 0, length: mutableText.length))
-        mutableText.replaceOccurrences(of: "'", with: "`'", options: [], range: NSRange(location: 0, length: mutableText.length))
-
-        return "['\(mutableText)']"
-    }
-
-}
-
-
-extension JSONPath {
-
-    public var textRepresentation: String {
-        var description = ""
-
-        for component in components {
-            switch component {
-            case .text(let text):
-                description += "['\(text)']"
-                break
-
-            case .numeric(let number):
-                description += "[\(number)]"
-
-            case .selfReference:
-                description += "[self]"
-            }
-        }
-        
-        return description
-    }
-
-}
-
-
-
 //MARK:- Equatable
 
 extension JSONPath: Equatable {
+
 }
 
 
@@ -101,7 +48,7 @@ public func ==(lhs: JSONPath, rhs: JSONPath) -> Bool {
 
 extension JSONPath.Component: Equatable {
 
-    private func asTuple()-> (text: String?, number: Int64?, isSelfReference: Bool) {
+    fileprivate func asTuple()-> (text: String?, number: Int64?, isSelfReference: Bool) {
         switch self {
         case .text(let text):
             return (text, nil, false)
@@ -127,26 +74,58 @@ public func ==(lhs: JSONPath.Component, rhs: JSONPath.Component) -> Bool {
 
 //MARK:- Debug Description
 
-extension JSONPath: CustomDebugStringConvertible, CustomStringConvertible {
-
-    public var description: String {
-        return textRepresentation
-    }
+extension JSONPath: CustomDebugStringConvertible {
 
     public var debugDescription: String {
-        return textRepresentation
+        var description = ""
+
+        for component in components {
+            switch component {
+            case .text(let text):
+                description += "['\(text)']"
+                break
+
+            case .numeric(let number):
+                description += "[\(number)]"
+
+            case .selfReference:
+                description += "[self]"
+            }
+        }
+
+        return description
     }
 }
 
 
 extension JSONPath.Component: CustomDebugStringConvertible {
 
-    public var description: String {
-        return textRepresentation
+    public var debugDescription: String {
+        switch self {
+        case .numeric(let i):
+            return "[\(i)]"
+        case .selfReference:
+            return "[self]"
+        case .text(let text):
+            return encodeStringAsSubscriptRepresentation(text)
+        }
     }
 
-    public var debugDescription: String {
-        return textRepresentation
+    fileprivate func encodeStringAsSubscriptRepresentation(_ text: String) -> String {
+        let mutableText =  NSMutableString(string: text)
+        //Note that the order of the replacements is significant. We must replace '`' first otherwise our replacements will get replaced.
+        mutableText.replaceOccurrences(of: "`", with: "``", options: [], range: NSRange(location: 0, length: mutableText.length))
+        mutableText.replaceOccurrences(of: "'", with: "`'", options: [], range: NSRange(location: 0, length: mutableText.length))
+
+        return "['\(mutableText)']"
+    }
+}
+
+
+extension JSONPath {
+    @available(*, deprecated: 0.5, message: "Use JSONPath.Component.debugDescription instead.")
+    public static func encodeTextAsSubscriptPathComponent(_ text: String) -> String {
+        return JSONPath.Component.text(text).debugDescription
     }
 }
 
@@ -164,7 +143,7 @@ extension JSONPath {
     }
 
 
-    private static func componentsInPath(_ path: String) throws -> [Component] {
+    fileprivate static func componentsInPath(_ path: String) throws -> [Component] {
         var components = [Component]()
         try JSONPath.enumerateComponentsInPath(path) { component, componentIdx, stop in
             components.append(component)
@@ -173,7 +152,7 @@ extension JSONPath {
     }
 
 
-    public static func enumerateComponentsInPath(_ JSONPath: String, enumerator: (component: Component, componentIdx: Int, stop: inout Bool) throws -> Void) throws {
+    public static func enumerateComponentsInPath(_ JSONPath: String, enumerator: (_ component: Component, _ componentIdx: Int, _ stop: inout Bool) throws -> Void) throws {
 
         let scanner = Scanner(string: JSONPath)
         scanner.charactersToBeSkipped = nil //Don't skip whitespace!
@@ -184,7 +163,7 @@ extension JSONPath {
             let component = try scanComponent(scanner)
             //Call the enumerator
             var stop = false
-            try enumerator(component: component, componentIdx: componentIdx, stop: &stop)
+            try enumerator(component, componentIdx, &stop)
             if stop { return }
 
             //Prepare for next loop
@@ -196,7 +175,7 @@ extension JSONPath {
     }
 
 
-    private static func scanComponent(_ scanner: Scanner) throws -> Component {
+    fileprivate static func scanComponent(_ scanner: Scanner) throws -> Component {
 
         if let component = try scanSubscriptComponent(scanner) {
             return component
@@ -210,7 +189,7 @@ extension JSONPath {
     }
 
 
-    private static func scanSubscriptComponent(_ scanner: Scanner) throws -> Component? {
+    fileprivate static func scanSubscriptComponent(_ scanner: Scanner) throws -> Component? {
         let result: Component
 
         //Is it subscript?
@@ -248,14 +227,14 @@ extension JSONPath {
     }
 
 
-    private static let headCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ$_")
-    private static let bodyCharacters: CharacterSet = {
+    fileprivate static let headCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ$_")
+    fileprivate static let bodyCharacters: CharacterSet = {
         let mutableCharacterSet = NSMutableCharacterSet(charactersIn: "0123456789")
         mutableCharacterSet.formUnion(with: headCharacters)
         return mutableCharacterSet as CharacterSet
         }()
 
-    private static func scanIdentifierComponent(_ scanner: Scanner) throws -> Component? {
+    fileprivate static func scanIdentifierComponent(_ scanner: Scanner) throws -> Component? {
         //Technically there are a lot more unicode code points that are acceptable, but we go for 99+% of JSON keys.
         //See on https://mathiasbynens.be/notes/javascript-properties.
 
@@ -276,16 +255,16 @@ extension JSONPath {
         return .text(identifier)
     }
 
-    private static let dotCharacterSet = CharacterSet(charactersIn: ".")
+    fileprivate static let dotCharacterSet = CharacterSet(charactersIn: ".")
 
-    private static func consumeOptionalTraillingDot(_ scanner: Scanner) {
+    fileprivate static func consumeOptionalTraillingDot(_ scanner: Scanner) {
         scanner.scanCharacters(from: dotCharacterSet, into: nil)
     }
 
 
-    private static let subScriptDelimiters = CharacterSet(charactersIn: "`'")
+    fileprivate static let subScriptDelimiters = CharacterSet(charactersIn: "`'")
 
-    private static func scanSingleQuoteDelimittedString(_ scanner: Scanner, string: inout String) throws -> Bool {
+    fileprivate static func scanSingleQuoteDelimittedString(_ scanner: Scanner, string: inout String) throws -> Bool {
 
         guard scanner.scanString("'", into: nil) else {
             return false
@@ -331,15 +310,12 @@ extension JSONPath {
 
 extension JSONPath {
 
-    //MARK: Component caching
-
-    /// A cache of the values of each component of a path. 
-    //The key is the path and the value is an array of NSNumber, NSString and NSNull which represent .numeric, .text and .selfReference respectively.
-    private static let componentsCache = NSCache<NSString, NSArray>()
+    /// A cache of the values of each component of a path. The key is the path and the value is an array of NSNumber, NSString and NSNull which represent .Numeric, .Text and .SelfReference respectively.
+    fileprivate static let componentsCache = NSCache<AnyObject, AnyObject>()
 
 
-    private static func componentsForStringRepresentation(_ string: String) -> [Component]? {
-        guard let foundationComponents = JSONPath.componentsCache.object(forKey: string) as? [AnyObject] else {
+    fileprivate static func componentsForStringRepresentation(_ string: String) -> [Component]? {
+        guard let foundationComponents = JSONPath.componentsCache.object(forKey: string as AnyObject) as? [AnyObject] else {
             return nil
         }
         let components = foundationComponents.map({ object -> Component in
@@ -362,12 +338,12 @@ extension JSONPath {
     }
 
 
-    private static func setComponents(_ components: [Component], forStringRepresentation string: String) {
+    fileprivate static func setComponents(_ components: [Component], forStringRepresentation string: String) {
         //We can't store an array of enums in an NSCache so we map to an array of AnyObject.
         let FoundationComponents = components.map({ component -> AnyObject in
             switch component {
             case .numeric(let number):
-                return NSNumber(value: number)
+                return NSNumber(value: number as Int64)
 
             case .text(let text):
                 return NSString(string: text)
@@ -376,20 +352,16 @@ extension JSONPath {
                 return NSNull()
             }
         })
-        JSONPath.componentsCache.setObject(FoundationComponents, forKey: string)
+        JSONPath.componentsCache.setObject(FoundationComponents as AnyObject, forKey: string as AnyObject)
     }
 
-
-    //MARK: Initialization
 
     public init(path: String) throws {
         let components: [Component]
 
-        //Attempt to read from cache...
         if let cachedComponents = JSONPath.componentsForStringRepresentation(path) {
             components = cachedComponents
         } else {
-            //...create and update cache value if value not found in cache.
             components = try JSONPath.componentsInPath(path)
             JSONPath.setComponents(components, forStringRepresentation: path)
         }
